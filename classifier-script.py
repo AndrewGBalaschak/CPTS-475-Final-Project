@@ -1,54 +1,57 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, confusion_matrix
 
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-# This model is too big for my gpu
-device = 'cpu'
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-data = pd.read_csv('data/cleaned/NF-UQ-NIDS-CLEANED.csv')
-data = data.head(500000)
+class NFUQNIDS(Dataset):
+    def __init__(self, data_file, transform=None, target_transform=None):
+        self.data = pd.read_csv(data_file)
+        self.labels = self.data['Label']
+        self.data = self.data.drop({'Label', 'Attack', 'Dataset'}, axis=1)
+        self.data = self.data.values
 
-# Separate features (X) and labels (y)
-X = data.drop({'Label', 'Attack', 'Dataset'}, axis=1)
-y = data['Label']
+        # Standardize the features
+        scaler = StandardScaler()
+        self.data = scaler.fit_transform(self.data)
 
-# Delete data so it can be garbage collected
-del data
+        self.transform = transform
+        self.target_transform = target_transform
 
-# Drop column labels
-X = X.values
-y = y.values
+    def __len__(self):
+        return len(self.labels)
 
-# Split the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=99)
+    def __getitem__(self, idx):
+        item = self.data[idx]
+        label = self.labels.iloc[idx]
+        if self.transform:
+            item = self.transform(item)
+        if self.target_transform:
+            label = self.target_transform(label)
+        return torch.tensor(item, dtype=torch.float32).to(device), torch.tensor(label, dtype=torch.float32).to(device)
 
-# Delete data so it can be garbage collected
-del X
-del y
+dataset = NFUQNIDS('data/cleaned/NF-UQ-NIDS-CLEANED.csv')
 
-# Standardize the features
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
+# Train/Test split
+train_size = int(0.8 * dataset.__len__())
+test_size = dataset.__len__() - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-# Convert data to PyTorch tensors
-X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
-y_train = torch.tensor(y_train, dtype=torch.float32).to(device)
-X_test = torch.tensor(X_test, dtype=torch.float32).to(device)
-y_test = torch.tensor(y_test, dtype=torch.float32).to(device)
+train_data = DataLoader(train_dataset, batch_size=512, shuffle=True)
+test_data  = DataLoader(test_dataset, batch_size=512, shuffle=True)
 
 # Model Hyperparameters
-input_dim = X_train.shape[1]
+input_dim = 75
 hidden_dim = 256
 output_dim = 1
+learning_rate = 0.001
 
 # Model Definition
 class Classifier(nn.Module):
@@ -70,7 +73,7 @@ model = Classifier(input_dim, hidden_dim, output_dim).to(device)
 
 # Optimizer Definition
 criterion = nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Training
 num_epochs = 100
@@ -80,42 +83,56 @@ train_loss_list = []
 test_loss_list = []
 
 for epoch in tqdm(range(num_epochs)):
-    train_outputs = model(X_train).squeeze()
-    train_loss = criterion(train_outputs, y_train)
-    train_loss_list.append(train_loss.item())
+    epoch_train_loss = 0
+    epoch_test_loss = 0
 
-    test_outputs = model(X_test).squeeze()
-    test_loss = criterion(test_outputs, y_test)
-    test_loss_list.append(test_loss.item())
+    # Train the model
+    for X_batch, y_batch in train_data:
+        # Calculate training output and loss
+        train_outputs = model(X_batch).squeeze()
+        train_loss = criterion(train_outputs, y_batch)
+        epoch_train_loss = epoch_train_loss + train_loss.item()
 
-    optimizer.zero_grad()
-    train_loss.backward()
-    optimizer.step()
+        optimizer.zero_grad()
+        train_loss.backward()
+        optimizer.step()
+
+    # Calculate training loss this epoch
+    train_loss_list.append(epoch_train_loss / len(train_data))
+
+    # Print loss to command line
     if(((epoch+1) % 10) == 0):
-        print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss.item():.4f}, Test Loss: {test_loss.item():.4f}')
+        print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {(epoch_train_loss / len(train_data)):.4f}')
 
-del train_outputs
-del test_outputs
-del train_loss
-del test_loss
+    # Test the model
+    model.eval()
+    with torch.no_grad():
+        for X_batch, y_batch in train_data:
+            # Calculate training output and loss
+            train_outputs = model(X_batch).squeeze()
+            train_loss = criterion(train_outputs, y_batch)
+            
+            epoch_test_loss = epoch_test_loss + train_loss.item()
+
+    # Calculate testing loss this epoch
+    test_loss_list.append(epoch_test_loss / len(test_data))
+
+# Calculate statistics
+# accuracy = accuracy_score(y_test.cpu(), predictions.cpu())
+# precision = precision_score(y_test.cpu(), predictions.cpu())
+# recall = recall_score(y_test.cpu(), predictions.cpu())
+# confusion = confusion_matrix(y_test.cpu(), predictions.cpu())
+
+# print(f'Accuracy: {accuracy:.2f}')
+# print(f'Precision: {precision:.2f}')
+# print(f'Recall: {recall:.2f}')
+# print(f'Confusion Matrix:\n{confusion}')
 
 # Plot the loss curve
 plt.plot(train_loss_list, label="train")
 plt.plot(test_loss_list, label="validation")
-plt.title("Training Loss Curve")
+plt.title("Loss Curve")
 plt.xlabel("Epochs")
 plt.ylabel("Loss")
 plt.legend()
 plt.show()
-
-# Evaluation
-model.eval()
-with torch.no_grad():
-    test_outputs = model(X_test)
-    _, predictions = test_outputs.max(1)
-    
-    accuracy = accuracy_score(y_test.cpu(), predictions.cpu())
-    confusion = confusion_matrix(y_test.cpu(), predictions.cpu())
-
-    print(f'Accuracy: {accuracy:.2f}')
-    print(f'Confusion Matrix:\n{confusion}')
