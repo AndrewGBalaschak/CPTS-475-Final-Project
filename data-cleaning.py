@@ -62,6 +62,18 @@ if __name__ == "__main__":
     data = data.dropna(how='any')
     print('Entries with NaN dropped: ' + str(old_size-len(data)))
 
+    # Dataset for attack data
+    attacks_data = data.copy()
+    attacks_data = attacks_data.groupby('Label')
+    attacks_data = attacks_data.get_group(1)
+    attacks_data.to_csv('data/cleaned/NF-UQ-NIDS-ATTACKS')
+    
+    # Dataset for benign data
+    benign_data = data.copy()
+    benign_data = benign_data.groupby('Label')
+    benign_data = benign_data.get_group(0)
+    benign_data.to_csv('data/cleaned/NF-UQ-NIDS-BENIGN')
+
     # Dump the data to a .csv
     data.to_csv('data/cleaned/NF-UQ-NIDS-CLEANED.csv')
     print('Data dumped to CSV')
