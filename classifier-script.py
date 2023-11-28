@@ -44,8 +44,9 @@ train_size = int(0.8 * dataset.__len__())
 test_size = dataset.__len__() - train_size
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-train_data = DataLoader(train_dataset, batch_size=512, shuffle=True)
-test_data  = DataLoader(test_dataset, batch_size=512, shuffle=True)
+batch_size = 512
+train_data = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+test_data  = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 
 # Model Hyperparameters
 input_dim = 75
@@ -59,14 +60,12 @@ class Classifier(nn.Module):
         super(Classifier, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc4 = nn.Linear(hidden_dim, output_dim)
+        self.fc3 = nn.Linear(hidden_dim, output_dim)
     
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        x = torch.sigmoid(self.fc4(x))  # Sigmoid activation for binary classification
+        x = torch.sigmoid(self.fc3(x))  # Sigmoid activation for binary classification
         return x
 
 model = Classifier(input_dim, hidden_dim, output_dim).to(device)
