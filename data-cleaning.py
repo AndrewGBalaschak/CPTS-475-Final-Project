@@ -41,13 +41,16 @@ if __name__ == "__main__":
     # Load the dataset
     data = pd.read_csv("data/NF-UQ-NIDS.csv")
 
+    # Sample data to be 10% of its original size
+    reduce = True
+
     # Convert IP address strings into bitmask
     data['IPV4_SRC_ADDR'] = data['IPV4_SRC_ADDR'].apply(ip_to_bits)
     data['IPV4_DST_ADDR'] = data['IPV4_DST_ADDR'].apply(ip_to_bits)
 
     # Drop any rows that have NaN values
     old_size = len(data)
-    data = data.dropna(how='any')
+    data.dropna(how='any', inplace=True)
     print('Entries with NaN dropped: ' + str(old_size-len(data)))
 
     # Split IP columns into 32 separate columns, one for each bit of address
@@ -59,7 +62,7 @@ if __name__ == "__main__":
 
     # Drop any rows that have NaN values, again
     old_size = len(data)
-    data = data.dropna(how='any')
+    data.dropna(how='any', inplace=True)
     print('Entries with NaN dropped: ' + str(old_size-len(data)))
     
     # Dataset for attack data
@@ -69,15 +72,27 @@ if __name__ == "__main__":
     # attacks_data = attacks_data.drop('Label')
     groups = attacks_data.groupby('Attack')
     for name, group in groups:
-        group.to_csv(f'data/cleaned/attacks/NF-UQ-NIDS-ATTACKS-{str.upper(name)}.csv', index=False)
+        if reduce:
+            group = group.sample(frac=0.1, random_state=475)
+            group.to_csv(f'data/reduced/attacks/NF-UQ-NIDS-ATTACKS-{str.upper(name)}.csv', index=False)
+        else:
+            group.to_csv(f'data/cleaned/attacks/NF-UQ-NIDS-ATTACKS-{str.upper(name)}.csv', index=False)
     
     # Dataset for benign data
     benign_data = data.copy()
     benign_data = benign_data.groupby('Label')
     benign_data = benign_data.get_group(0)
     # benign_data = benign_data.drop('Label')
-    benign_data.to_csv('data/cleaned/NF-UQ-NIDS-BENIGN.csv', index=False)
+    if reduce:
+        benign_data = benign_data.sample(frac=0.1, random_state=475)
+        benign_data.to_csv('data/reduced/NF-UQ-NIDS-BENIGN-REDUCED.csv', index=False)
+    else:
+        benign_data.to_csv('data/cleaned/NF-UQ-NIDS-BENIGN.csv', index=False)
 
     # Dump the data to a .csv
-    data.to_csv('data/cleaned/NF-UQ-NIDS-CLEANED.csv', index=False)
+    if reduce:
+        data = data.sample(frac=0.1, random_state=475)
+        data.to_csv('data/reduced/NF-UQ-NIDS-REDUCED.csv', index=False)
+    else:
+        data.to_csv('data/cleaned/NF-UQ-NIDS-CLEANED.csv', index=False)
     print('Data dumped to CSV')
