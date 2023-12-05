@@ -89,6 +89,18 @@ if __name__ == "__main__":
     else:
         benign_data.to_csv('data/cleaned/NF-UQ-NIDS-BENIGN.csv', index=False)
 
+    # Dataset for attack data
+    attacks_data = data.copy()
+    attacks_data = attacks_data.groupby('Label')
+    attacks_data = attacks_data.get_group(1)
+    attacks_data.to_csv('data/cleaned/NF-UQ-NIDS-ATTACKS')
+    
+    # Dataset for benign data
+    benign_data = data.copy()
+    benign_data = benign_data.groupby('Label')
+    benign_data = benign_data.get_group(0)
+    benign_data.to_csv('data/cleaned/NF-UQ-NIDS-BENIGN')
+
     # Dump the data to a .csv
     if reduce:
         data = data.sample(frac=0.1, random_state=475)
