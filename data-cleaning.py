@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 
 # Function to convert IPv4 string to integer
@@ -37,12 +38,17 @@ def ip_to_bits(ip):
     return [int(bit) for bit in bits]
 
 # Main
-if __name__ == "__main__":
+def main():
+    args = sys.argv[1:]
+    
+    if '-reduce' in args:
+        reduce = True
+    else:
+        reduce = False
+
+
     # Load the dataset
     data = pd.read_csv("data/NF-UQ-NIDS.csv")
-
-    # Sample data to be 10% of its original size
-    reduce = True
 
     # Convert IP address strings into bitmask
     data['IPV4_SRC_ADDR'] = data['IPV4_SRC_ADDR'].apply(ip_to_bits)
